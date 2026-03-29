@@ -6,6 +6,9 @@ import (
 )
 
 func resolveAgentToolAllowlist(definition AgentContextDefinition) []string {
+	if frontmatterParseFailed(definition) {
+		return []string{}
+	}
 	if definition.Agent == nil || definition.Agent.Frontmatter.Tools == nil {
 		return nil
 	}
@@ -28,6 +31,9 @@ func resolveAgentToolAllowlist(definition AgentContextDefinition) []string {
 }
 
 func resolveAgentMCPServerAllowlist(definition AgentContextDefinition) map[string]struct{} {
+	if frontmatterParseFailed(definition) {
+		return map[string]struct{}{}
+	}
 	if definition.Agent == nil || definition.Agent.Frontmatter.MCPServers == nil {
 		return nil
 	}
@@ -42,4 +48,14 @@ func resolveAgentMCPServerAllowlist(definition AgentContextDefinition) map[strin
 	}
 
 	return allowlist
+}
+
+func frontmatterParseFailed(definition AgentContextDefinition) bool {
+	if definition.Agent == nil {
+		return false
+	}
+	if strings.TrimSpace(definition.Agent.RawFrontmatter) == "" {
+		return false
+	}
+	return strings.TrimSpace(definition.Agent.FrontmatterErr) != ""
 }

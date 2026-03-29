@@ -330,3 +330,39 @@ Use frontmatter identity.
 		t.Fatal("expected slack MCP server to be blocked by frontmatter allowlist")
 	}
 }
+
+func TestNewAgentInstance_InvalidFrontmatterFailsClosedForToolsAndMCPServers(t *testing.T) {
+	workspace := setupWorkspace(t, map[string]string{
+		"AGENT.md": `---
+tools: [read_file
+mcpServers: [github]
+---
+# Agent
+`,
+	})
+	defer cleanupWorkspace(t, workspace)
+
+	cfg := &config.Config{
+		Agents: config.AgentsConfig{
+			Defaults: config.AgentDefaults{
+				Workspace: workspace,
+				ModelName: "default-model",
+			},
+		},
+		Tools: config.ToolsConfig{
+			ReadFile: config.ReadFileToolConfig{Enabled: true},
+		},
+	}
+
+	agent := NewAgentInstance(&config.AgentConfig{
+		ID:        "research",
+		Workspace: workspace,
+	}, &cfg.Agents.Defaults, cfg, &mockProvider{})
+
+	if _, ok := agent.Tools.Get("read_file"); ok {
+		t.Fatal("expected malformed frontmatter to fail closed and block read_file")
+	}
+	if agent.AllowsMCPServer("github") {
+		t.Fatal("expected malformed frontmatter to fail closed for MCP servers")
+	}
+}
