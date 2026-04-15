@@ -40,7 +40,7 @@ type replyTokenEntry struct {
 // and the official LINE Bot SDK for sending messages.
 type LINEChannel struct {
 	*channels.BaseChannel
-	config         config.LINEConfig
+	config         *config.LINESettings
 	client         *messaging_api.MessagingApiAPI
 	botUserID      string   // Bot's user ID
 	botBasicID     string   // Bot's basic ID (e.g. @216ru...)
@@ -52,7 +52,11 @@ type LINEChannel struct {
 }
 
 // NewLINEChannel creates a new LINE channel instance.
-func NewLINEChannel(cfg config.LINEConfig, messageBus *bus.MessageBus) (*LINEChannel, error) {
+func NewLINEChannel(
+	bc *config.Channel,
+	cfg *config.LINESettings,
+	messageBus *bus.MessageBus,
+) (*LINEChannel, error) {
 	if cfg.ChannelSecret.String() == "" || cfg.ChannelAccessToken.String() == "" {
 		return nil, fmt.Errorf("line channel_secret and channel_access_token are required")
 	}
@@ -62,10 +66,10 @@ func NewLINEChannel(cfg config.LINEConfig, messageBus *bus.MessageBus) (*LINECha
 		return nil, fmt.Errorf("failed to create LINE messaging client: %w", err)
 	}
 
-	base := channels.NewBaseChannel("line", cfg, messageBus, cfg.AllowFrom,
+	base := channels.NewBaseChannel("line", cfg, messageBus, bc.AllowFrom,
 		channels.WithMaxMessageLength(5000),
-		channels.WithGroupTrigger(cfg.GroupTrigger),
-		channels.WithReasoningChannelID(cfg.ReasoningChannelID),
+		channels.WithGroupTrigger(bc.GroupTrigger),
+		channels.WithReasoningChannelID(bc.ReasoningChannelID),
 	)
 
 	return &LINEChannel{
@@ -191,6 +195,7 @@ func (c *LINEChannel) processEvent(event webhook.EventInterface) {
 	var content string
 	var mediaPaths []string
 	var messageID string
+	var quoteToken string
 	var isMentioned bool
 
 	// Helper to register a local file with the media store
@@ -214,6 +219,7 @@ func (c *LINEChannel) processEvent(event webhook.EventInterface) {
 		isMentioned = c.isBotMentioned(msg)
 		// Store quote token for quoting the original message in reply
 		if msg.QuoteToken != "" {
+			quoteToken = msg.QuoteToken
 			c.quoteTokens.Store(chatID, msg.QuoteToken)
 		}
 		// Strip bot mention from text in group chats
@@ -275,13 +281,6 @@ func (c *LINEChannel) processEvent(event webhook.EventInterface) {
 		"source_type": sourceType,
 	}
 
-	var peer bus.Peer
-	if isGroup {
-		peer = bus.Peer{Kind: "group", ID: chatID}
-	} else {
-		peer = bus.Peer{Kind: "direct", ID: senderID}
-	}
-
 	logger.DebugCF("line", "Received message", map[string]any{
 		"sender_id":    senderID,
 		"chat_id":      chatID,
@@ -300,7 +299,25 @@ func (c *LINEChannel) processEvent(event webhook.EventInterface) {
 		return
 	}
 
-	c.HandleMessage(c.ctx, peer, messageID, senderID, chatID, content, mediaPaths, metadata, sender)
+	inboundCtx := bus.InboundContext{
+		Channel:   c.Name(),
+		ChatID:    chatID,
+		ChatType:  map[bool]string{true: "group", false: "direct"}[isGroup],
+		SenderID:  senderID,
+		MessageID: messageID,
+		Mentioned: isMentioned,
+		Raw:       metadata,
+	}
+	if msgEvent.ReplyToken != "" {
+		inboundCtx.ReplyHandles = map[string]string{
+			"reply_token": msgEvent.ReplyToken,
+		}
+		if quoteToken != "" {
+			inboundCtx.ReplyHandles["quote_token"] = quoteToken
+		}
+	}
+
+	c.HandleInboundContext(c.ctx, chatID, content, mediaPaths, inboundCtx, sender)
 }
 
 // isBotMentioned checks if the bot is mentioned in the message.
