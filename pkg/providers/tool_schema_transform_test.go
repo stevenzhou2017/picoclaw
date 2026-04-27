@@ -53,7 +53,7 @@ func TestWrapProviderWithToolSchemaTransform_DisabledPassesToolsThrough(t *testi
 
 func TestWrapProviderWithToolSchemaTransform_GoogleSanitizesSchemas(t *testing.T) {
 	capture := &toolCaptureProvider{}
-	wrapped, err := wrapProviderWithToolSchemaTransform(capture, "google")
+	wrapped, err := wrapProviderWithToolSchemaTransform(capture, "simple")
 	if err != nil {
 		t.Fatalf("wrapProviderWithToolSchemaTransform() error = %v", err)
 	}
