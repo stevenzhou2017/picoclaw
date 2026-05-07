@@ -415,6 +415,8 @@ func TestConnectServer_StreamableHTTPRequestResponseMode(t *testing.T) {
 
 	for _, transportType := range []string{"http", "streamable-http"} {
 		t.Run(transportType, func(t *testing.T) {
+			t.Parallel()
+
 			server := sdkmcp.NewServer(&sdkmcp.Implementation{
 				Name:    "streamable-test-server",
 				Version: "1.0.0",
