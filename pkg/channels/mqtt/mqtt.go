@@ -213,7 +213,7 @@ func (c *MQTTChannel) Stop(_ context.Context) error {
 	logger.InfoC("mqtt", "Stopping MQTT channel")
 	c.SetRunning(false)
 
-	if c.client != nil && c.client.IsConnected() {
+	if c.client != nil {
 		c.client.Disconnect(500)
 	}
 
